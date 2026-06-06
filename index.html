@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pro Football Manager - Live Stats & Ratings</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: #121212; color: #e0e0e0; padding: 8px;
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+        }
+        
+        /* Header & Skor */
+        .match-header {
+            background: #1e1e1e; padding: 8px; border-radius: 8px;
+            text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 6px;
+        }
+        .timer { font-size: 0.95rem; color: #ffcc00; font-weight: bold; }
+        .scoreboard { display: flex; justify-content: space-around; align-items: center; margin-top: 2px; }
+        .team-name { font-size: 0.9rem; font-weight: 600; width: 40%; text-transform: uppercase;}
+        .score { font-size: 1.8rem; font-weight: 800; color: #00ffcc; width: 20%; }
+
+        /* 2D Pitch Visualization */
+        .pitch {
+            position: relative; background: #2e7d32; height: 140px;
+            border: 2px solid rgba(255,255,255,0.5); border-radius: 6px; margin-bottom: 6px;
+            overflow: hidden; box-shadow: inset 0 0 15px rgba(0,0,0,0.4);
+        }
+        .lines::before {
+            content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.4);
+        }
+        .lines::after {
+            content: ''; position: absolute; left: 50%; top: 50%; width: 40px; height: 40px;
+            border: 1px solid rgba(255,255,255,0.4); border-radius: 50%; transform: translate(-50%, -50%);
+        }
+        .penalty-box { position: absolute; top: 25px; bottom: 25px; width: 22px; border: 1px solid rgba(255,255,255,0.4); }
+        .penalty-box.left { left: -1px; border-left: none; }
+        .penalty-box.right { right: -1px; border-right: none; }
+        
+        /* Dots Pemain & Bola */
+        .player {
+            position: absolute; width: 12px; height: 12px; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 7px; font-weight: bold; color: white;
+            transition: all 0.5s ease-out; z-index: 2; transform: translate(-50%, -50%);
+        }
+        .team-a { background: #e53935; border: 1px solid #fff; }
+        .team-b { background: #1e88e5; border: 1px solid #fff; }
+        .ball {
+            position: absolute; width: 8px; height: 8px; background: #fff; border-radius: 50%;
+            transition: all 0.25s ease-out; z-index: 3; border: 1px solid #000; transform: translate(-50%, -50%);
+        }
+
+        /* Navigasi Tab */
+        .tab-menu { display: flex; background: #1e1e1e; border-radius: 6px; margin-bottom: 6px; padding: 2px; }
+        .tab-btn {
+            flex: 1; background: none; border: none; color: #aaa; padding: 8px 4px;
+            font-size: 0.8rem; font-weight: 600; cursor: pointer; border-radius: 4px;
+            text-align: center; -webkit-tap-highlight-color: transparent;
+        }
+        .tab-btn.active { background: #2a2a2a; color: #00ffcc; }
+
+        /* Konten Tab */
+        .tab-container { flex: 1; background: #0a0a0a; border-radius: 6px; border: 1px solid #2a2a2a; overflow-y: auto; padding: 10px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Style Tab 1: Komentar */
+        .log-entry { font-size: 0.8rem; margin-bottom: 5px; line-height: 1.3; border-bottom: 1px solid #151515; padding-bottom: 4px; display: flex; flex-direction: column-reverse;}
+        .log-min { color: #ffcc00; font-weight: bold; margin-right: 4px; }
+        .log-goal { color: #00ffcc; font-weight: bold; }
+
+        /* Style Tab 2: Statistik */
+        .stat-row { margin-bottom: 10px; font-size: 0.8rem; }
+        .stat-labels { display: flex; justify-content: space-between; margin-bottom: 3px; font-weight: 500; }
+        .stat-bar-bg { background: #222; height: 8px; border-radius: 4px; display: flex; overflow: hidden; }
+        .bar-a { background: #e53935; transition: width 0.4s; }
+        .bar-b { background: #1e88e5; transition: width 0.4s; }
+
+        /* Style Tab 3: Gol & Assist */
+        .goal-list-item { font-size: 0.85rem; padding: 6px 0; border-bottom: 1px solid #1a1a1a; display: flex; align-items: center; }
+
+        /* Style Tab 4: Rating */
+        .rating-grid { display: flex; gap: 10px; justify-content: space-between; }
+        .rating-col { width: 48%; }
+        .rating-title { font-size: 0.85rem; font-weight: bold; margin-bottom: 6px; padding-bottom: 2px; border-bottom: 2px solid #333; }
+        .player-rating-row { display: flex; justify-content: space-between; font-size: 0.78rem; padding: 4px 0; border-bottom: 1px solid #151515; }
+        .rating-val { font-weight: bold; color: #ffcc00; }
+        .rating-val.excellent { color: #00ffcc; }
+        .rating-val.bad { color: #ff4444; }
+
+        /* Tombol Utama */
+        .action-panel { margin-top: 6px; }
+        .btn { 
+            background: #00ffcc; color: #121212; border: none; padding: 12px;
+            font-size: 0.95rem; font-weight: bold; border-radius: 6px; width: 100%;
+        }
+        .btn:disabled { background: #444; color: #888; }
+    </style>
+</head>
+<body>
+
+    <div class="match-header">
+        <div id="match-time" class="timer">Belum Dimulai</div>
+        <div class="scoreboard">
+            <div class="team-name" style="text-align: right; color: #ff4444;">Indonesia</div>
+            <div id="match-score" class="score">0 - 0</div>
+            <div class="team-name" style="text-align: left; color: #4444ff;">Vietnam</div>
+        </div>
+    </div>
+
+    <div class="pitch" id="pitch">
+        <div class="lines"></div>
+        <div class="penalty-box left"></div>
+        <div class="penalty-box right"></div>
+        <div id="game-ball" class="ball" style="top: 50%; left: 50%;"></div>
+    </div>
+
+    <div class="tab-menu">
+        <button class="tab-btn active" onclick="switchTab(event, 'tab-commentary')">Komentar</button>
+        <button class="tab-btn" onclick="switchTab(event, 'tab-stats')">Statistik</button>
+        <button class="tab-btn" onclick="switchTab(event, 'tab-goals')">Gol & Assist</button>
+        <button class="tab-btn" onclick="switchTab(event, 'tab-ratings')">Rating</button>
+    </div>
+
+    <div class="tab-container">
+        <div id="tab-commentary" class="tab-content active">
+            <div id="commentary-box"><div style="text-align: center; color: #666; font-size: 0.8rem; margin-top: 20px;">Tekan Mulai untuk melihat jalannya pertandingan.</div></div>
+        </div>
+
+        <div id="tab-stats" class="tab-content">
+            <div class="stat-row">
+                <div class="stat-labels"><span id="stat-pos-a">50%</span><span>Penguasaan Bola</span><span id="stat-pos-b">50%</span></div>
+                <div class="stat-bar-bg"><div id="bar-pos-a" class="bar-a" style="width: 50%"></div><div id="bar-pos-b" class="bar-b" style="width: 50%"></div></div>
+            </div>
+            <div class="stat-row">
+                <div class="stat-labels"><span id="stat-sot-a">0</span><span>Tembakan Tepat Sasaran</span><span id="stat-sot-b">0</span></div>
+                <div class="stat-bar-bg"><div id="bar-sot-a" class="bar-a" style="width: 50%"></div><div id="bar-sot-b" class="bar-b" style="width: 50%"></div></div>
+            </div>
+            <div class="stat-row">
+                <div class="stat-labels"><span id="stat-sof-a">0</span><span>Tembakan Meleset</span><span id="stat-sof-b">0</span></div>
+                <div class="stat-bar-bg"><div id="bar-sof-a" class="bar-a" style="width: 50%"></div><div id="bar-sof-b" class="bar-b" style="width: 50%"></div></div>
+            </div>
+            <div class="stat-row">
+                <div class="stat-labels"><span id="stat-int-a">0</span><span>Intersepsi / Tekel</span><span id="stat-int-b">0</span></div>
+                <div class="stat-bar-bg"><div id="bar-int-a" class="bar-a" style="width: 50%"></div><div id="bar-int-b" class="bar-b" style="width: 50%"></div></div>
+            </div>
+        </div>
+
+        <div id="tab-goals" class="tab-content">
+            <div id="goals-box" style="font-size: 0.8rem; color: #888; text-align: center; margin-top: 20px;">Belum ada gol tercipta.</div>
+        </div>
+
+        <div id="tab-ratings" class="tab-content">
+            <div class="rating-grid">
+                <div class="rating-col">
+                    <div class="rating-title" style="color: #ff4444;">INDONESIA</div>
+                    <div id="ratings-list-a"></div>
+                </div>
+                <div class="rating-col">
+                    <div class="rating-title" style="color: #4444ff;">VIETNAM</div>
+                    <div id="ratings-list-b"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="action-panel">
+        <button id="start-btn" class="btn" onclick="startMatch()">Mulai Pertandingan</button>
+    </div>
+
+    <script>
+        // Objek Skuad Pemain & Base Rating (Awal mula selalu reset ke 6.0)
+        let playersA = [
+            {id: 'a0', name: "Ernando M.", short: "EN", pos: "GK", rating: 6.0},
+            {id: 'a1', name: "Asnawi M.", short: "AI", pos: "DEF", rating: 6.0},
+            {id: 'a2', name: "Rizky Ridho", short: "RR", pos: "DEF", rating: 6.0},
+            {id: 'a3', name: "Jay Idzes", short: "JI", pos: "DEF", rating: 6.0},
+            {id: 'a4', name: "Pratama Arhan", short: "PA", pos: "DEF", rating: 6.0},
+            {id: 'a5', name: "Justin Hubner", short: "JH", pos: "MID", rating: 6.0},
+            {id: 'a6', name: "Thom Haye", short: "TH", pos: "MID", rating: 6.0},
+            {id: 'a7', name: "Marselino F.", short: "MF", pos: "MID", rating: 6.0},
+            {id: 'a8', name: "Ragnar O.", short: "RO", pos: "FWD", rating: 6.0},
+            {id: 'a9', name: "Rafael Struick", short: "RS", pos: "FWD", rating: 6.0},
+            {id: 'a10', name: "Witan S.", short: "WR", pos: "FWD", rating: 6.0}
+        ];
+
+        let playersB = [
+            {id: 'b0', name: "Dang Van Lam", short: "DL", pos: "GK", rating: 6.0},
+            {id: 'b1', name: "Vu Van Thanh", short: "VD", pos: "DEF", rating: 6.0},
+            {id: 'b2', name: "Bui Tien Dung", short: "BT", pos: "DEF", rating: 6.0},
+            {id: 'b3', name: "Que Ngoc Hai", short: "QN", pos: "DEF", rating: 6.0},
+            {id: 'b4', name: "Do Duy Manh", short: "DD", pos: "DEF", rating: 6.0},
+            {id: 'b5', name: "N. Hoang Duc", short: "HD", pos: "MID", rating: 6.0},
+            {id: 'b6', name: "Doan Van Hau", short: "VH", pos: "MID", rating: 6.0},
+            {id: 'b7', name: "N. Quang Hai", short: "NT", pos: "MID", rating: 6.0},
+            {id: 'b8', name: "N. Tien Linh", short: "TL", pos: "FWD", rating: 6.0},
+            {id: 'b9', name: "N. Van Toan", short: "VP", pos: "FWD", rating: 6.0},
+            {id: 'b10', name: "C. Phuong", short: "CP", pos: "FWD", rating: 6.0}
+        ];
+
+        const baseFormA = [{x:8,y:50},{x:24,y:15},{x:22,y:38},{x:22,y:62},{x:24,y:85},{x:44,y:50},{x:48,y:25},{x:48,y:75},{x:74,y:50},{x:70,y:20},{x:70,y:80}];
+        const baseFormB = [{x:92,y:50},{x:76,y:15},{x:78,y:38},{x:78,y:62},{x:76,y:85},{x:56,y:50},{x:52,y:25},{x:52,y:75},{x:26,y:50},{x:30,y:20},{x:30,y:80}];
+
+        let matchStats = {
+            posA: 50, posB: 50, sotA: 0, sotB: 0, sofA: 0, sofB: 0, intA: 0, intB: 0, scoreA: 0, scoreB: 0
+        };
+
+        let minute = 0;
+        let matchInterval;
+        const pitchEl = document.getElementById('pitch');
+        const ballEl = document.getElementById('game-ball');
+
+        // Fungsi Ganti Tab Menu
+        function switchTab(evt, tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            if (evt) evt.target.classList.add('active');
+        }
+
+        // Gambar Pemain Pertama Kali
+        function setupInitialView() {
+            document.querySelectorAll('.player').forEach(e => e.remove());
+            baseFormA.forEach((pos, i) => createPlayerDot(pos.x, pos.y, playersA[i].short, 'team-a', `p-a${i}`));
+            baseFormB.forEach((pos, i) => createPlayerDot(pos.x, pos.y, playersB[i].short, 'team-b', `p-b${i}`));
+            updateRatingsUI();
+            updateStatsUI();
+        }
+
+        function createPlayerDot(x, y, label, className, id) {
+            const p = document.createElement('div');
+            p.className = `player ${className}`; p.id = id; p.innerText = label;
+            p.style.left = `${x}%`; p.style.top = `${y}%`;
+            pitchEl.appendChild(p);
+        }
+
+        // Jalankan saat file dimuat pertama kali
+        setupInitialView();
+
+        // RESET DAN MULAI GAME BARU
+        function startMatch() {
+            clearInterval(matchInterval);
+            minute = 0;
+            
+            // 1. Reset Scoreboard & Waktu
+            document.getElementById('match-score').innerText = "0 - 0";
+            document.getElementById('match-time').innerText = "Menit 0'";
+            document.getElementById('commentary-box').innerHTML = '';
+            document.getElementById('goals-box').innerHTML = '';
+
+            // 2. Reset Statistik Objektif
+            matchStats = { posA: 50, posB: 50, sotA: 0, sotB: 0, sofA: 0, sofB: 0, intA: 0, intB: 0, scoreA: 0, scoreB: 0 };
+            
+            // 3. Reset Rating Pemain Kembali ke Murni 6.0
+            playersA.forEach(p => p.rating = 6.0);
+            playersB.forEach(p => p.rating = 6.0);
+            
+            setupInitialView();
+            moveBall(50, 50);
+            document.getElementById('start-btn').disabled = true;
+            addCommentary(0, "Peluit dibunyikan! Kick-off babak pertama.");
+
+            // Loop Engine per Menit Game
+            matchInterval = setInterval(() => {
+                minute++;
+                document.getElementById('match-time').innerText = `Menit ${minute}'`;
+
+                // Update Penguasaan Bola Berfluktuasi Acak Dinamis
+                let diff = (Math.random() * 6 - 3);
+                matchStats.posA = Math.max(35, Math.min(65, Math.round(matchStats.posA + diff)));
+                matchStats.posB = 100 - matchStats.posA;
+
+                // Berikan fluktuasi pasif performa tipis-tipis ke pemain acak tiap menit (+/- 0.1)
+                alterRandomPlayerRating();
+
+                if (Math.random() < 0.18) {
+                    calculateMatchEngine();
+                } else if (minute % 3 === 0) {
+                    // Sirkulasi bola biasa
+                    let bX = 40 + Math.random() * 20;
+                    let bY = 15 + Math.random() * 70;
+                    moveElements(bX, bY);
+                }
+
+                updateStatsUI();
+                updateRatingsUI();
+
+                if (minute === 45) {
+                    addCommentary(45, "--- Babak Pertama Selesai (Turun Minum) ---");
+                    moveElements(50, 50);
+                }
+
+                if (minute >= 90) {
+                    clearInterval(matchInterval);
+                    addCommentary(90, `Peluit Panjang! Pertandingan berakhir dengan skor ${matchStats.scoreA} - ${matchStats.scoreB}.`);
+                    document.getElementById('match-time').innerText = "Selesai";
+                    document.getElementById('start-btn').disabled = false;
+                    moveElements(50, 50);
+                }
+            }, 300);
+        }
+
+        // LOGIKA DINAMIS MATCH ENGINE
+        function calculateMatchEngine() {
+            // Tentukan tim penyerang berdasarkan probabilitas gabungan taktik dan keberuntungan
+            const isTeamAScouring = (Math.random() * 150 < (79 + matchStats.posA * 0.5));
+            const attacker = isTeamAScouring ? {list: playersA, oppList: playersB, tag: 'A', oppTag: 'B', name: "Indonesia"} : {list: playersB, oppList: playersA, tag: 'B', oppTag: 'A', name: "Vietnam"};
+
+            let bX = (attacker.tag === 'A') ? 84 : 16;
+            let bY = 20 + Math.random() * 60;
+            moveElements(bX, bY);
+
+            setTimeout(() => {
+                let rollAttack = Math.random() * 100;
+                let rollDefense = Math.random() * 100;
+
+                if (rollAttack > rollDefense + 25) {
+                    // GOL TERJADI!
+                    if(attacker.tag === 'A') { matchStats.scoreA++; matchStats.sotA++; } else { matchStats.scoreB++; matchStats.sotB++; }
+                    document.getElementById('match-score').innerText = `${matchStats.scoreA} - ${matchStats.scoreB}`;
+                    
+                    // Animasi Bola masuk gawang
+                    moveBall((attacker.tag === 'A') ? 98 : 2, 50);
+
+                    // Pilih Pencetak Gol (Utamakan Gelandang/Penyerang indeks 5-10)
+                    let scorerIdx = 5 + Math.floor(Math.random() * 6);
+                    let assistIdx = 1 + Math.floor(Math.random() * 7);
+                    if (assistIdx === scorerIdx) assistIdx = (assistIdx - 1) || 2;
+
+                    attacker.list[scorerIdx].rating = Math.min(10, attacker.list[scorerIdx].rating + 1.2);
+                    attacker.list[assistIdx].rating = Math.min(10, attacker.list[assistIdx].rating + 0.7);
+                    // Kiper kebobolan minus rating
+                    attacker.oppList[0].rating = Math.max(4, attacker.oppList[0].rating - 0.5);
+
+                    logGoalAndAssist(minute, attacker.name, attacker.list[scorerIdx].name, attacker.list[assistIdx].name);
+                    addCommentary(minute, `<span class="log-goal">GOL!</span> Sepakan terukur dari ${attacker.list[scorerIdx].name} memanfaatkan umpan manis ${attacker.list[assistIdx].name}!`);
+
+                    setTimeout(() => { if (minute < 90 && minute !== 45) moveElements(50, 50); }, 1000);
+
+                } else if (rollAttack > rollDefense) {
+                    // Shots on Target tapi di-Save Kiper Lawan
+                    if(attacker.tag === 'A') matchStats.sotA++; else matchStats.sotB++;
+                    attacker.oppList[0].rating = Math.min(10, attacker.oppList[0].rating + 0.5); // Kiper dapet poin penyelamatan
+                    addCommentary(minute, `Peluang emas ${attacker.name}! Tendangan keras berhasil ditepis dengan gemilang oleh kiper lawan.`);
+                } else if (rollAttack > rollDefense - 20) {
+                    // Shots Off Target
+                    if(attacker.tag === 'A') matchStats.sofA++; else matchStats.sofB++;
+                    addCommentary(minute, `Tembakan spekulasi diluncurkan oleh skuad ${attacker.name}, namun arah bola masih melambung tinggi.`);
+                } else {
+                    // Berhasil Diintersepsi/Tekel Bek Lawan
+                    if(attacker.tag === 'A') matchStats.intB++; else matchStats.intA++;
+                    let defIdx = 1 + Math.floor(Math.random() * 4); // Bek indeks 1-4
+                    attacker.oppList[defIdx].rating = Math.min(10, attacker.oppList[defIdx].rating + 0.4);
+                    addCommentary(minute, `Serangan balik ${attacker.name} berhasil dipatahkan lewat tekel bersih dari lini pertahanan lawan.`);
+                }
+            }, 200);
+        }
+
+        // UPDATE ELEMEN GRAFIS DAN FORMASI
+        function moveElements(ballX, ballY) {
+            moveBall(ballX, ballY);
+            const shiftX = ballX - 50;
+
+            // Update posisi titik pemain tim A
+            baseFormA.forEach((pos, i) => {
+                const el = document.getElementById(`p-a${i}`); if (!el) return;
+                let mult = (i >= 8) ? 0.75 : (i >= 5) ? 0.5 : (i >= 1) ? 0.25 : 0;
+                let finalX = Math.max(3, Math.min(97, pos.x + (shiftX * mult)));
+                let finalY = Math.max(5, Math.min(95, pos.y + (ballY - pos.y) * mult * 0.25));
+                el.style.left = `${finalX}%`; el.style.top = `${finalY}%`;
+            });
+
+            // Update posisi titik pemain tim B
+            baseFormB.forEach((pos, i) => {
+                const el = document.getElementById(`p-b${i}`); if (!el) return;
+                let mult = (i >= 8) ? 0.75 : (i >= 5) ? 0.5 : (i >= 1) ? 0.25 : 0;
+                let finalX = Math.max(3, Math.min(97, pos.x + (shiftX * mult)));
+                let finalY = Math.max(5, Math.min(95, pos.y + (ballY - pos.y) * mult * 0.25));
+                el.style.left = `${finalX}%`; el.style.top = `${finalY}%`;
+            });
+        }
+
+        function moveBall(x, y) { ballEl.style.left = `${x}%`; ballEl.style.top = `${y}%`; }
+
+        // UPDATE TAB INTERFACE UI DYNAMICALLY
+        function updateStatsUI() {
+            document.getElementById('stat-pos-a').innerText = matchStats.posA + "%";
+            document.getElementById('stat-pos-b').innerText = matchStats.posB + "%";
+            document.getElementById('bar-pos-a').style.width = matchStats.posA + "%";
+            document.getElementById('bar-pos-b').style.width = matchStats.posB + "%";
+
+            document.getElementById('stat-sot-a').innerText = matchStats.sotA;
+            document.getElementById('stat-sot-b').innerText = matchStats.sotB;
+            calculateBarRatio('bar-sot-a', 'bar-sot-b', matchStats.sotA, matchStats.sotB);
+
+            document.getElementById('stat-sof-a').innerText = matchStats.sofA;
+            document.getElementById('stat-sof-b').innerText = matchStats.sofB;
+            calculateBarRatio('bar-sof-a', 'bar-sof-b', matchStats.sofA, matchStats.sofB);
+
+            document.getElementById('stat-int-a').innerText = matchStats.intA;
+            document.getElementById('stat-int-b').innerText = matchStats.intB;
+            calculateBarRatio('bar-int-a', 'bar-int-b', matchStats.intA, matchStats.intB);
+        }
+
+        function calculateBarRatio(idA, idB, valA, valB) {
+            let total = valA + valB;
+            let pctA = total === 0 ? 50 : (valA / total) * 100;
+            document.getElementById(idA).style.width = pctA + "%";
+            document.getElementById(idB).style.width = (100 - pctA) + "%";
+        }
+
+        function updateRatingsUI() {
+            let htmlA = ""; playersA.forEach(p => htmlA += createRatingRow(p));
+            let htmlB = ""; playersB.forEach(p => htmlB += createRatingRow(p));
+            document.getElementById('ratings-list-a').innerHTML = htmlA;
+            document.getElementById('ratings-list-b').innerHTML = htmlB;
+        }
+
+        function createRatingRow(player) {
+            let fixedR = player.rating.toFixed(1);
+            let colorClass = fixedR >= 7.5 ? 'excellent' : (fixedR <= 5.4 ? 'bad' : '');
+            return `<div class="player-rating-row">
+                <span>[${player.pos}] ${player.name}</span>
+                <span class="rating-val ${colorClass}">${fixedR}</span>
+            </div>`;
+        }
+
+        function logGoalAndAssist(min, team, scorer, assistant) {
+            const box = document.getElementById('goals-box');
+            if(box.innerText.includes("Belum ada gol")) box.innerHTML = '';
+            const div = document.createElement('div');
+            div.className = 'goal-list-item';
+            div.innerHTML = `⚽ <b>${min}'</b> - [${team}] ${scorer} (Assist: ${assistant})`;
+            box.appendChild(div);
+        }
+
+        function addCommentary(min, text) {
+            const box = document.getElementById('commentary-box');
+            const log = document.createElement('div');
+            log.className = 'log-entry';
+            log.innerHTML = `<div><span class="log-min">[Mnt ${min}]</span> ${text}</div>`;
+            box.insertBefore(log, box.firstChild);
+        }
+
+        function alterRandomPlayerRating() {
+            let p = Math.random() < 0.5 ? playersA[Math.floor(Math.random() * 11)] : playersB[Math.floor(Math.random() * 11)];
+            let change = Math.random() < 0.5 ? 0.1 : -0.1;
+            p.rating = Math.max(3, Math.min(10, p.rating + change));
+        }
+    </script>
+</body>
+</html>
