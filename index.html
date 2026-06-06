@@ -6,10 +6,13 @@
     <title>Pro Football Manager - Live Stats & Ratings</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        /* FIX LAYOUT HP: Mengubah height 100vh & overflow hidden agar halaman bisa di-scroll jika layar kekecilan */
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
             background: #121212; color: #e0e0e0; padding: 8px;
-            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+            display: flex; flex-direction: column; 
+            min-height: 100vh;
         }
         
         /* Header & Skor */
@@ -62,8 +65,11 @@
         }
         .tab-btn.active { background: #2a2a2a; color: #00ffcc; }
 
-        /* Konten Tab */
-        .tab-container { flex: 1; background: #0a0a0a; border-radius: 6px; border: 1px solid #2a2a2a; overflow-y: auto; padding: 10px; }
+        /* Konten Tab - FIX: Beri batasan tinggi minimal agar rapi di semua ukuran HP */
+        .tab-container { 
+            background: #0a0a0a; border-radius: 6px; border: 1px solid #2a2a2a; 
+            padding: 10px; min-height: 180px; margin-bottom: 6px;
+        }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
@@ -92,12 +98,14 @@
         .rating-val.bad { color: #ff4444; }
 
         /* Tombol Utama */
-        .action-panel { margin-top: 6px; }
+        .action-panel { margin-top: auto; padding-top: 4px; }
         .btn { 
-            background: #00ffcc; color: #121212; border: none; padding: 12px;
-            font-size: 0.95rem; font-weight: bold; border-radius: 6px; width: 100%;
+            background: #00ffcc; color: #121212; border: none; padding: 14px;
+            font-size: 1rem; font-weight: bold; border-radius: 6px; width: 100%;
+            box-shadow: 0 4px 10px rgba(0, 255, 204, 0.2);
+            cursor: pointer;
         }
-        .btn:disabled { background: #444; color: #888; }
+        .btn:disabled { background: #444; color: #888; box-shadow: none; }
     </style>
 </head>
 <body>
@@ -172,7 +180,6 @@
     </div>
 
     <script>
-        // Objek Skuad Pemain & Base Rating (Awal mula selalu reset ke 6.0)
         let playersA = [
             {id: 'a0', name: "Ernando M.", short: "EN", pos: "GK", rating: 6.0},
             {id: 'a1', name: "Asnawi M.", short: "AI", pos: "DEF", rating: 6.0},
@@ -213,7 +220,6 @@
         const pitchEl = document.getElementById('pitch');
         const ballEl = document.getElementById('game-ball');
 
-        // Fungsi Ganti Tab Menu
         function switchTab(evt, tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
@@ -221,7 +227,6 @@
             if (evt) evt.target.classList.add('active');
         }
 
-        // Gambar Pemain Pertama Kali
         function setupInitialView() {
             document.querySelectorAll('.player').forEach(e => e.remove());
             baseFormA.forEach((pos, i) => createPlayerDot(pos.x, pos.y, playersA[i].short, 'team-a', `p-a${i}`));
@@ -237,24 +242,19 @@
             pitchEl.appendChild(p);
         }
 
-        // Jalankan saat file dimuat pertama kali
         setupInitialView();
 
-        // RESET DAN MULAI GAME BARU
         function startMatch() {
             clearInterval(matchInterval);
             minute = 0;
             
-            // 1. Reset Scoreboard & Waktu
             document.getElementById('match-score').innerText = "0 - 0";
             document.getElementById('match-time').innerText = "Menit 0'";
             document.getElementById('commentary-box').innerHTML = '';
             document.getElementById('goals-box').innerHTML = '';
 
-            // 2. Reset Statistik Objektif
             matchStats = { posA: 50, posB: 50, sotA: 0, sotB: 0, sofA: 0, sofB: 0, intA: 0, intB: 0, scoreA: 0, scoreB: 0 };
             
-            // 3. Reset Rating Pemain Kembali ke Murni 6.0
             playersA.forEach(p => p.rating = 6.0);
             playersB.forEach(p => p.rating = 6.0);
             
@@ -263,23 +263,19 @@
             document.getElementById('start-btn').disabled = true;
             addCommentary(0, "Peluit dibunyikan! Kick-off babak pertama.");
 
-            // Loop Engine per Menit Game
             matchInterval = setInterval(() => {
                 minute++;
                 document.getElementById('match-time').innerText = `Menit ${minute}'`;
 
-                // Update Penguasaan Bola Berfluktuasi Acak Dinamis
                 let diff = (Math.random() * 6 - 3);
                 matchStats.posA = Math.max(35, Math.min(65, Math.round(matchStats.posA + diff)));
                 matchStats.posB = 100 - matchStats.posA;
 
-                // Berikan fluktuasi pasif performa tipis-tipis ke pemain acak tiap menit (+/- 0.1)
                 alterRandomPlayerRating();
 
                 if (Math.random() < 0.18) {
                     calculateMatchEngine();
                 } else if (minute % 3 === 0) {
-                    // Sirkulasi bola biasa
                     let bX = 40 + Math.random() * 20;
                     let bY = 15 + Math.random() * 70;
                     moveElements(bX, bY);
@@ -300,12 +296,10 @@
                     document.getElementById('start-btn').disabled = false;
                     moveElements(50, 50);
                 }
-            }, 300);
+            }, 200);
         }
 
-        // LOGIKA DINAMIS MATCH ENGINE
         function calculateMatchEngine() {
-            // Tentukan tim penyerang berdasarkan probabilitas gabungan taktik dan keberuntungan
             const isTeamAScouring = (Math.random() * 150 < (79 + matchStats.posA * 0.5));
             const attacker = isTeamAScouring ? {list: playersA, oppList: playersB, tag: 'A', oppTag: 'B', name: "Indonesia"} : {list: playersB, oppList: playersA, tag: 'B', oppTag: 'A', name: "Vietnam"};
 
@@ -318,21 +312,16 @@
                 let rollDefense = Math.random() * 100;
 
                 if (rollAttack > rollDefense + 25) {
-                    // GOL TERJADI!
                     if(attacker.tag === 'A') { matchStats.scoreA++; matchStats.sotA++; } else { matchStats.scoreB++; matchStats.sotB++; }
                     document.getElementById('match-score').innerText = `${matchStats.scoreA} - ${matchStats.scoreB}`;
-                    
-                    // Animasi Bola masuk gawang
                     moveBall((attacker.tag === 'A') ? 98 : 2, 50);
 
-                    // Pilih Pencetak Gol (Utamakan Gelandang/Penyerang indeks 5-10)
                     let scorerIdx = 5 + Math.floor(Math.random() * 6);
                     let assistIdx = 1 + Math.floor(Math.random() * 7);
                     if (assistIdx === scorerIdx) assistIdx = (assistIdx - 1) || 2;
 
                     attacker.list[scorerIdx].rating = Math.min(10, attacker.list[scorerIdx].rating + 1.2);
                     attacker.list[assistIdx].rating = Math.min(10, attacker.list[assistIdx].rating + 0.7);
-                    // Kiper kebobolan minus rating
                     attacker.oppList[0].rating = Math.max(4, attacker.oppList[0].rating - 0.5);
 
                     logGoalAndAssist(minute, attacker.name, attacker.list[scorerIdx].name, attacker.list[assistIdx].name);
@@ -341,30 +330,25 @@
                     setTimeout(() => { if (minute < 90 && minute !== 45) moveElements(50, 50); }, 1000);
 
                 } else if (rollAttack > rollDefense) {
-                    // Shots on Target tapi di-Save Kiper Lawan
                     if(attacker.tag === 'A') matchStats.sotA++; else matchStats.sotB++;
-                    attacker.oppList[0].rating = Math.min(10, attacker.oppList[0].rating + 0.5); // Kiper dapet poin penyelamatan
+                    attacker.oppList[0].rating = Math.min(10, attacker.oppList[0].rating + 0.5);
                     addCommentary(minute, `Peluang emas ${attacker.name}! Tendangan keras berhasil ditepis dengan gemilang oleh kiper lawan.`);
                 } else if (rollAttack > rollDefense - 20) {
-                    // Shots Off Target
                     if(attacker.tag === 'A') matchStats.sofA++; else matchStats.sofB++;
                     addCommentary(minute, `Tembakan spekulasi diluncurkan oleh skuad ${attacker.name}, namun arah bola masih melambung tinggi.`);
                 } else {
-                    // Berhasil Diintersepsi/Tekel Bek Lawan
                     if(attacker.tag === 'A') matchStats.intB++; else matchStats.intA++;
-                    let defIdx = 1 + Math.floor(Math.random() * 4); // Bek indeks 1-4
+                    let defIdx = 1 + Math.floor(Math.random() * 4);
                     attacker.oppList[defIdx].rating = Math.min(10, attacker.oppList[defIdx].rating + 0.4);
                     addCommentary(minute, `Serangan balik ${attacker.name} berhasil dipatahkan lewat tekel bersih dari lini pertahanan lawan.`);
                 }
             }, 200);
         }
 
-        // UPDATE ELEMEN GRAFIS DAN FORMASI
         function moveElements(ballX, ballY) {
             moveBall(ballX, ballY);
             const shiftX = ballX - 50;
 
-            // Update posisi titik pemain tim A
             baseFormA.forEach((pos, i) => {
                 const el = document.getElementById(`p-a${i}`); if (!el) return;
                 let mult = (i >= 8) ? 0.75 : (i >= 5) ? 0.5 : (i >= 1) ? 0.25 : 0;
@@ -373,7 +357,6 @@
                 el.style.left = `${finalX}%`; el.style.top = `${finalY}%`;
             });
 
-            // Update posisi titik pemain tim B
             baseFormB.forEach((pos, i) => {
                 const el = document.getElementById(`p-b${i}`); if (!el) return;
                 let mult = (i >= 8) ? 0.75 : (i >= 5) ? 0.5 : (i >= 1) ? 0.25 : 0;
@@ -385,7 +368,6 @@
 
         function moveBall(x, y) { ballEl.style.left = `${x}%`; ballEl.style.top = `${y}%`; }
 
-        // UPDATE TAB INTERFACE UI DYNAMICALLY
         function updateStatsUI() {
             document.getElementById('stat-pos-a').innerText = matchStats.posA + "%";
             document.getElementById('stat-pos-b').innerText = matchStats.posB + "%";
